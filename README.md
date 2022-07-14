@@ -1,3 +1,3 @@
 # SDLVideoPlayer
 
-This project demonstrate play video by using FFmpeg & SDL in Windows
+This project demonstrates playing mp4 video with libffmpeg & libsdl

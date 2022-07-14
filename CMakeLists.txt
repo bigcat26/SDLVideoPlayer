@@ -1,47 +1,37 @@
-cmake_minimum_required(VERSION 3.6)
-set(name video_player)
-project (${name} C)
+cmake_minimum_required(VERSION 3.21)
+project(VideoPlayer)
 
-set ( CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH};${CMAKE_CURRENT_SOURCE_DIR}/cmake" )
-include( Universe )
-include( FindSDL )
-include( FindFFmpeg )
+include(cmake/conan.cmake)
 
-#
-# set SDLDIR=E:\code\h264reader\sdl
-# set FFMPEG_DIR=e:\code\ffmpeg
-#
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE "Debug")
+endif(NOT CMAKE_BUILD_TYPE)
 
-if (${SDL_FOUND})
-  message("Found SDL: ${SDL_VERSION_STRING}")
-  message("  SDL_LIBRARY:     ${SDL_LIBRARY}")
-  message("  SDL_INCLUDE_DIR: ${SDL_INCLUDE_DIR}")
-  include_directories(${SDL_INCLUDE_DIR})
-else ()
-  message(FATAL_ERROR "SDL not found!")
-endif ()
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib)
 
+conan_cmake_configure(
+  REQUIRES
+    sdl/2.0.20
+    ffmpeg/4.3.2
+  GENERATORS 
+    cmake_find_package
+  IMPORTS
+    lib,*.so*->${CMAKE_BINARY_DIR}/lib
+)
 
-if (${FFMPEG_FOUND})
-  message("Found FFmpeg:")
-  message("  FFMPEG_LIBRARIES:   ${FFMPEG_LIBRARIES}")
-  message("  FFMPEG_INCLUDE_DIR: ${FFMPEG_INCLUDE_DIR}")
-  include_directories(${SDL_INCLUDE_DIR})
-else ()
-  message(FATAL_ERROR "FFmpeg not found!")
-endif ()
+conan_cmake_autodetect(settings)
+conan_cmake_install(PATH_OR_REFERENCE .
+                    BUILD missing
+                    SETTINGS 
+                      build_type=Release
+                    OPTIONS
+)
 
-file (GLOB_RECURSE src src/*.c inc/*.h)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})
+list(APPEND CMAKE_PREFIX_PATH ${CMAKE_BINARY_DIR})
 
-include_directories(${SDL_INCLUDE_DIR})
-include_directories(${FFMPEG_INCLUDE_DIR})
+find_package(SDL2 REQUIRED)
+find_package(ffmpeg REQUIRED)
 
-add_executable(${name} ${src})
-target_link_libraries(${name} ${SDL_LIBRARY} ${FFMPEG_LIBRARIES})
-
-if (WIN32)
-  target_link_libraries(${name} ws2_32 secur32)
-endif ()
-
-#add_library(${name} STATIC ${src} ${hdr})
-#set_target_properties(${name} PROPERTIES PREFIX "lib")
+add_subdirectory(player)
