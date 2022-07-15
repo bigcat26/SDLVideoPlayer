@@ -88,21 +88,26 @@ int main() {
     }
 
     av_log_set_level(AV_LOG_INFO);
-    av_register_all();
     res = avformat_open_input(&afc, MP4_FILE, NULL, NULL);
-    if (0 != res) {
-        LOGE("ERROR: %08X\n", res);
-        return -1;
+    if (res != 0) {
+        char msg[AV_ERROR_MAX_STRING_SIZE];
+        av_strerror(res, msg, AV_ERROR_MAX_STRING_SIZE);
+        LOGE("Unable to open stream, error: %s", msg);
+        return res;
     }
 
     res = avformat_find_stream_info(afc, NULL);
-    if (0 != res) {
-        LOGE("ERROR: %08X\n", res);
-        return -1;
+    if (res < 0) {
+        char msg[AV_ERROR_MAX_STRING_SIZE];
+        av_strerror(res, msg, AV_ERROR_MAX_STRING_SIZE);
+        LOGE("Unable to find stream info, error: %s", msg);
+        avformat_free_context(afc);
+        return res;
     }
 
-    for (i = 0; i < afc->nb_streams; ++i) {
-        // av_dump_format(afc, i, "", 1);
+    //av_dump_format(afc, 0, MP4_FILE, 0);
+    for (i = 0; i < afc->nb_streams; i++) {
+        av_dump_format(afc, i, MP4_FILE, 0);
         if (afc->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
             video_stream_id = i;
             break;
