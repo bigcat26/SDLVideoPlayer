@@ -26,6 +26,7 @@ conan_cmake_install(PATH_OR_REFERENCE .
                     SETTINGS 
                       build_type=Release
                     OPTIONS
+                      ffmpeg:with_libvpx=False
 )
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})

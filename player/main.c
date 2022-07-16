@@ -1,16 +1,11 @@
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libavutil/imgutils.h>
-#include <libavutil/mem.h>
-#include <libswscale/swscale.h>
 
 // #define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_thread.h>
 
-#define MP4_FILE "~/Downloads/Incoming/video.mp4"
+#include "player.h"
+#include "media_decoder.h"
 
-#define LOGE(fmt, args...) printf("[%s:%d] " fmt, __FILE__, __LINE__, ##args)
 // New SDLv2
 // https://stackoverflow.com/questions/17579286/sdl2-0-alternative-for-sdl-overlay
 
@@ -65,12 +60,11 @@ int main() {
     int rgbsize;
     int video_stream_id = -1;
     uint8_t *rgb_buf;
-    AVCodec *decoder = NULL;
+#if 0
     AVFrame *fyuv = NULL;
     AVFrame *frgb = NULL;
     AVPacket packet;
-    AVCodecContext *acc = NULL;
-    AVFormatContext *afc = NULL;
+#endif
     struct SwsContext *img_convert_ctx;
 
     SDL_Event sdl_event;
@@ -82,54 +76,35 @@ int main() {
     size_t yPlaneSz, uvPlaneSz;
     int uvPitch;
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {
-        LOGE("Could not initialize SDL - %s\n", SDL_GetError());
+    MediaDecoder* decoder;
+
+    mediaDecoderInit();
+
+    decoder = mediaDecoderCreate();
+    if (!decoder) {
+        LOGE("create decoder failed");
         return -1;
     }
 
-    av_log_set_level(AV_LOG_INFO);
-    res = avformat_open_input(&afc, MP4_FILE, NULL, NULL);
+    res = mediaDecoderOpen(decoder, MP4_FILE);
     if (res != 0) {
-        char msg[AV_ERROR_MAX_STRING_SIZE];
-        av_strerror(res, msg, AV_ERROR_MAX_STRING_SIZE);
-        LOGE("Unable to open stream, error: %s", msg);
-        return res;
+        LOGE("video decoder open file %s failed: %d", MP4_FILE, res);
+        return -1;
     }
 
-    res = avformat_find_stream_info(afc, NULL);
-    if (res < 0) {
-        char msg[AV_ERROR_MAX_STRING_SIZE];
-        av_strerror(res, msg, AV_ERROR_MAX_STRING_SIZE);
-        LOGE("Unable to find stream info, error: %s", msg);
-        avformat_free_context(afc);
-        return res;
-    }
-
-    //av_dump_format(afc, 0, MP4_FILE, 0);
-    for (i = 0; i < afc->nb_streams; i++) {
-        av_dump_format(afc, i, MP4_FILE, 0);
-        if (afc->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
-            video_stream_id = i;
+    for (;;) {
+        res = mediaDecoderReadFrame(decoder);
+        if (res <= 0) {
             break;
         }
     }
 
-    if (video_stream_id < 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {
+        LOGE("Could not initialize SDL - %s", SDL_GetError());
         return -1;
     }
 
-    acc = afc->streams[video_stream_id]->codec;
-    decoder = avcodec_find_decoder(acc->codec_id);
-    if (NULL == decoder) {
-        return -1;
-    }
-
-    res = avcodec_open2(acc, decoder, NULL);
-    if (0 != res) {
-        LOGE("ERROR: %08X\n", res);
-        return -1;
-    }
-
+#if 0
     fyuv = av_frame_alloc();
     frgb = av_frame_alloc();
 
@@ -245,7 +220,6 @@ int main() {
                 break;
         }
     }
-
     getchar();
 
     SDL_DestroyTexture(sdl_texture);
@@ -268,9 +242,10 @@ int main() {
     if (NULL != fyuv) {
         av_frame_free(&fyuv);
     }
-    if (NULL != afc) {
+    if (NULL != afc) {    
         avformat_close_input(&afc);
     }
+#endif
 
     return 0;
 }
