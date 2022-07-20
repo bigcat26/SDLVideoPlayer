@@ -1,7 +1,13 @@
 
+#if defined(CONFIG_ENABLE_UI)
 // #define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_thread.h>
+#endif
+
+#if defined(CONFIG_ENABLE_UI)
+#include <libswscale/swscale.h>
+#endif
 
 #include "player.h"
 #include "media_decoder.h"
@@ -51,6 +57,17 @@ void SaveFrame(AVFrame *pFrame, int width, int height, int index, int bpp)
 }
 #endif
 
+
+void sdlInit(void)
+{
+#if defined(CONFIG_ENABLE_UI)
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {
+        LOGE("Could not initialize SDL - %s", SDL_GetError());
+        return -1;
+    }
+#endif
+}
+
 int main() {
     int i;
     int fps;
@@ -67,6 +84,7 @@ int main() {
 #endif
     struct SwsContext *img_convert_ctx;
 
+#if defined(CONFIG_ENABLE_UI)
     SDL_Event sdl_event;
     SDL_Window *sdl_win = NULL;
     SDL_Renderer *sdl_renderer = NULL;
@@ -75,6 +93,7 @@ int main() {
     Uint8 *yPlane, *uPlane, *vPlane;
     size_t yPlaneSz, uvPlaneSz;
     int uvPitch;
+#endif
 
     MediaDecoder* decoder;
 
@@ -97,11 +116,6 @@ int main() {
         if (res <= 0) {
             break;
         }
-    }
-
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {
-        LOGE("Could not initialize SDL - %s", SDL_GetError());
-        return -1;
     }
 
 #if 0

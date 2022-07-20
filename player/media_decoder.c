@@ -6,11 +6,9 @@ extern "C" {
 #include <libavcodec/bsf.h>
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
+#include <libavutil/error.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/mem.h>
-#include <libavutil/error.h>
-
-#include <libswscale/swscale.h>
 
 #if defined(__cplusplus)
 }
@@ -18,6 +16,10 @@ extern "C" {
 
 #include "player.h"
 #include "media_decoder.h"
+
+
+#define LOGD MLOGD
+#define LOGE MLOGE
 
 #if 0
 void SaveFrame(AVFrame *pFrame, int width, int height, int index, int bpp)
@@ -58,14 +60,13 @@ void SaveFrame(AVFrame *pFrame, int width, int height, int index, int bpp)
 }
 #endif
 
-#define MEDIA_DECODER_ENABLE_BSF      1
-#define MEDIA_DECODER_ENABLE_DECODER  1
-#define MEDIA_DECODER_MAX_STREAMS     2
-
+#define MEDIA_DECODER_ENABLE_BSF 1
+#define MEDIA_DECODER_ENABLE_DECODER 1
+#define MEDIA_DECODER_MAX_STREAMS 2
 
 struct MediaDecoder {
     AVFormatContext* afc;
-    //AVCodec* codec[MEDIA_DECODER_MAX_STREAMS];
+    // AVCodec* codec[MEDIA_DECODER_MAX_STREAMS];
     MediaDecoderOnPacket onRawPacket;
 #if MEDIA_DECODER_ENABLE_DECODER
     AVCodecContext* codecCtx[MEDIA_DECODER_MAX_STREAMS];
@@ -76,13 +77,13 @@ struct MediaDecoder {
 #endif
 };
 
-void mediaDecoderDestroy(MediaDecoder *decoder) {
+void mediaDecoderDestroy(MediaDecoder* decoder) {
     if (decoder) {
         free(decoder);
     }
 }
 
-MediaDecoder *mediaDecoderCreate(void) {
+MediaDecoder* mediaDecoderCreate(void) {
     MediaDecoder* decoder = malloc(sizeof(MediaDecoder));
     if (decoder) {
         memset(decoder, 0, sizeof(*decoder));
@@ -90,28 +91,25 @@ MediaDecoder *mediaDecoderCreate(void) {
     return decoder;
 }
 
-static int mediaDecoderDumpError(const char *text, int code) {
+static int mediaDecoderDumpError(const char* text, int code) {
     char msg[AV_ERROR_MAX_STRING_SIZE];
     av_strerror(code, msg, AV_ERROR_MAX_STRING_SIZE);
-    LOGE("%s: %s (%d)", text, msg, code);
+    LOGE("%s: %s (%d)\n", text, msg, code);
     return code;
 }
 
-int mediaDecoderInitDecoder(MediaDecoder* decoder, int streamId, AVCodec* codec)
-{
+int mediaDecoderInitDecoder(MediaDecoder* decoder, int streamId, AVCodec* codec) {
 #if MEDIA_DECODER_ENABLE_DECODER
     int res;
 
     decoder->codecCtx[streamId] = avcodec_alloc_context3(codec);
-    if (!decoder->codecCtx[streamId])
-    {
+    if (!decoder->codecCtx[streamId]) {
         LOGE("alloc decoder context error");
         return -1;
     }
 
     res = avcodec_open2(decoder->codecCtx[streamId], codec, NULL);
-    if (res < 0)
-    {
+    if (res < 0) {
         mediaDecoderDumpError("codec open error", res);
         return res;
     }
@@ -119,68 +117,70 @@ int mediaDecoderInitDecoder(MediaDecoder* decoder, int streamId, AVCodec* codec)
     return 0;
 }
 
-int mediaDecoderInitBitstreamFilter(MediaDecoder* decoder, int streamId, AVCodec* codec)
-{
+int mediaDecoderInitBitstreamFilter(MediaDecoder* decoder, int streamId, AVCodec* codec) {
 #if MEDIA_DECODER_ENABLE_BSF
     int res;
     const AVBitStreamFilter* bsf = NULL;
 
     if (codec->id == AV_CODEC_ID_H264) {
         bsf = av_bsf_get_by_name("h264_mp4toannexb");
+        LOGD("stream #%d codec id is h264, bsf=%p\n", streamId, bsf);
     } else if (codec->id == AV_CODEC_ID_HEVC) {
         bsf = av_bsf_get_by_name("hevc_mp4toannexb");
+        LOGD("stream #%d codec id is hevc, bsf=%p\n", streamId, bsf);
     }
 
     if (bsf != NULL) {
         res = av_bsf_alloc(bsf, &decoder->bsf[streamId]);
-        if (res != 0)
-        {
+        if (res != 0) {
             mediaDecoderDumpError("unable to alloc bsf", res);
-        }
-        else
-        {
+        } else {
             avcodec_parameters_copy(
                 decoder->bsf[streamId]->par_in,
                 decoder->afc->streams[streamId]->codecpar);
-            av_bsf_init(decoder->bsf[streamId]);
+            res = av_bsf_init(decoder->bsf[streamId]);
+            LOGD("stream #%d bsf init res=%d\n", res);
         }
     }
 #endif
     return 0;
 }
 
-int mediaDecoderOpen(MediaDecoder *decoder, const char* file) {
+int mediaDecoderOpen(MediaDecoder* decoder, const char* file) {
     int i;
     int res;
 
     res = avformat_open_input(&decoder->afc, file, NULL, NULL);
+    MLOGD("avformat_open_input res=%d\n", res);
     if (res != 0) {
         return mediaDecoderDumpError("unable to open input", res);
     }
 
     res = avformat_find_stream_info(decoder->afc, NULL);
+    MLOGD("avformat_find_stream_info res=%d\n", res);
     if (res < 0) {
         return mediaDecoderDumpError("unable to find stream info", res);
     }
 
+    MLOGD("nb_streams=%d\n", decoder->afc->nb_streams);
     for (i = 0; i < decoder->afc->nb_streams; ++i) {
         AVCodecContext* acc = decoder->afc->streams[i]->codec;
         AVCodec* codec = avcodec_find_decoder(acc->codec_id);
-        if (!codec) {
-            LOGE("Unable to find decoder for codec tag: %c%c%c%c", 
+        LOGD("find decoder for codec tag: %c%c%c%c result %p\n",
+             acc->codec_tag & 0xff, (acc->codec_tag >> 8) & 0xff,
                 acc->codec_tag & 0xff, (acc->codec_tag >> 8) & 0xff, 
-                (acc->codec_tag >> 16) & 0xff, acc->codec_tag >> 24);
-            return -1;
-        }
+             acc->codec_tag & 0xff, (acc->codec_tag >> 8) & 0xff,
+             (acc->codec_tag >> 16) & 0xff, acc->codec_tag >> 24,
+             codec);
 
-        LOGD("found decoder for codec tag: %c%c%c%c",
-            acc->codec_tag & 0xff, (acc->codec_tag >> 8) & 0xff,
-            (acc->codec_tag >> 16) & 0xff, acc->codec_tag >> 24);
-
-        if (i < MEDIA_DECODER_MAX_STREAMS) {
-            // decoder->codec[i] = codec;
-            mediaDecoderInitDecoder(decoder, i, codec);
-            mediaDecoderInitBitstreamFilter(decoder, i, codec);
+        if (codec) {
+            if (i < MEDIA_DECODER_MAX_STREAMS) {
+                // decoder->codec[i] = codec;
+                mediaDecoderInitDecoder(decoder, i, codec);
+                mediaDecoderInitBitstreamFilter(decoder, i, codec);
+            } else {
+                LOGE("warn: too many streams %d\n", i);
+            }
         }
     }
 
@@ -194,24 +194,26 @@ enum AVMediaType mediaDecoderStreamCodec(MediaDecoder* decoder, int streamId) {
     return AVMEDIA_TYPE_UNKNOWN;
 }
 
-int mediaDecoderStreamIsVideo(MediaDecoder* decoder, int streamId)
-{
+int mediaDecoderStreamIsVideo(MediaDecoder* decoder, int streamId) {
     return mediaDecoderStreamCodec(decoder, streamId) == AVMEDIA_TYPE_VIDEO;
 }
 
-int mediaDecoderStreamIsAudio(MediaDecoder* decoder, int streamId)
-{
+int mediaDecoderStreamIsAudio(MediaDecoder* decoder, int streamId) {
     return mediaDecoderStreamCodec(decoder, streamId) == AVMEDIA_TYPE_AUDIO;
 }
 
-void mediaDecoderDumpFormat(MediaDecoder* decoder) {
-    av_dump_format(decoder->afc, 0, MP4_FILE, 0);
+void mediaDecoderDumpFormat(MediaDecoder* decoder, const char* file) {
+    av_dump_format(decoder->afc, 0, file, 0);
 }
 
-static void mediaDecoderProcessDecode(MediaDecoder* decoder, AVPacket* pkt, int streamId)
-{
+static void mediaDecoderProcessDecode(MediaDecoder* decoder, AVPacket* pkt, int streamId) {
     int res;
     AVFrame* frame = NULL;
+
+    LOGD("avcodec_send_packet streamId=%d codecCtx=%p\n", streamId, decoder->codecCtx[streamId]);
+    if (decoder->codecCtx[streamId] == NULL) {
+        return;
+    }
 
     frame = av_frame_alloc();
     if (!frame) {
@@ -221,35 +223,35 @@ static void mediaDecoderProcessDecode(MediaDecoder* decoder, AVPacket* pkt, int 
 
     res = avcodec_send_packet(decoder->codecCtx[streamId], pkt);
     if (res != 0) {
+        LOGE("avcodec_send_packet failed streamId=%d\n", pkt->stream_index);
         mediaDecoderDumpError("codec send packet error", res);
-        return;
+        goto cleanup;
     }
 
     for (;;) {
         res = avcodec_receive_frame(decoder->codecCtx[streamId], frame);
         if (res == AVERROR(EAGAIN) || res == AVERROR_EOF) {
             break;
-        }
-        else if (res < 0)
-        {
+        } else if (res < 0) {
             mediaDecoderDumpError("bsf receive packet error", res);
             break;
         }
 
         // TODO: do something with frame...
-
+        LOGD("TODO: paint the frame...\n");
         av_frame_unref(frame);
     }
 
+cleanup:
     if (frame) {
         av_frame_free(&frame);
     }
 }
 
-static void mediaDecoderProcessBitstreamFilter(MediaDecoder* decoder, AVPacket *pkt) {
+static void mediaDecoderProcessBitstreamFilter(MediaDecoder* decoder, AVPacket* pkt) {
     int res;
     int streamId = pkt->stream_index;
-    AVPacket * filteredPacket = NULL;
+    AVPacket* filteredPacket = NULL;
 
     if (streamId >= MEDIA_DECODER_MAX_STREAMS) {
         return;
@@ -269,7 +271,7 @@ static void mediaDecoderProcessBitstreamFilter(MediaDecoder* decoder, AVPacket *
     res = av_bsf_send_packet(decoder->bsf[streamId], pkt);
     if (res != 0) {
         mediaDecoderDumpError("bsf send packet error", res);
-        return;
+        goto cleanup;
     }
 
     for (;;) {
@@ -280,7 +282,7 @@ static void mediaDecoderProcessBitstreamFilter(MediaDecoder* decoder, AVPacket *
             mediaDecoderDumpError("bsf receive packet error", res);
             break;
         }
-     
+
         if (decoder->onFilteredPacket) {
             decoder->onFilteredPacket(decoder, streamId, filteredPacket->data, filteredPacket->size);
         }
@@ -289,11 +291,11 @@ static void mediaDecoderProcessBitstreamFilter(MediaDecoder* decoder, AVPacket *
         av_packet_unref(filteredPacket);
     }
 
+cleanup:
     if (filteredPacket) {
         av_packet_free(&filteredPacket);
     }
 }
-
 
 int mediaDecoderReadFrame(MediaDecoder* decoder) {
     int res;
@@ -301,14 +303,12 @@ int mediaDecoderReadFrame(MediaDecoder* decoder) {
 
     res = av_read_frame(decoder->afc, &pkt);
     if (AVERROR_EOF == res) {
+        LOGD("read frame reaches EOF\n");
         return 0;
     }
 
     if (res < 0) {
-        char msg[AV_ERROR_MAX_STRING_SIZE];
-        av_strerror(res, msg, AV_ERROR_MAX_STRING_SIZE);
-        LOGE("read frame error: %s (%d)", msg, res);
-        return res;
+        return mediaDecoderDumpError("read frame error", res);
     }
 
     if (decoder->onRawPacket) {
@@ -316,9 +316,7 @@ int mediaDecoderReadFrame(MediaDecoder* decoder) {
     }
 
     mediaDecoderProcessBitstreamFilter(decoder, &pkt);
-    
     av_packet_unref(&pkt);
-
     return 1;
 }
 

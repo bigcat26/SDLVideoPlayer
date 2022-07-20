@@ -12,8 +12,8 @@
 #define LOGD(fmt, ...) printf("[%s:%d] " fmt "\n", __FILE__, __LINE__, __VA_ARGS__)
 #define LOGE(fmt, ...) printf("[%s:%d] " fmt "\n", __FILE__, __LINE__, __VA_ARGS__)
 #else
-#define LOGD(fmt, args...) printf("[%s:%d] " fmt "\n", __FILE__, __LINE__, ##args)
-#define LOGE(fmt, args...) printf("[%s:%d] " fmt "\n", __FILE__, __LINE__, ##args)
+#define LOGD(fmt, args...) printf("[%s:%d] " fmt, __FILE__, __LINE__, ##args)
+#define LOGE(fmt, args...) printf("[%s:%d] " fmt, __FILE__, __LINE__, ##args)
 #endif
 
 

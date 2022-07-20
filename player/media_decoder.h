@@ -1,6 +1,8 @@
 #ifndef _MEDIA_DECODER_H_
 #define _MEDIA_DECODER_H_
 
+#include <stdint.h>
+
 typedef enum MediaType {
     MediaTypeVideo,
     MediaTypeAudio
@@ -36,7 +38,7 @@ int mediaDecoderStreamIsVideo(MediaDecoder* decoder, int streamId);
 
 int mediaDecoderStreamIsAudio(MediaDecoder* decoder, int streamId);
 
-void mediaDecoderDumpFormat(MediaDecoder* decoder);
+void mediaDecoderDumpFormat(MediaDecoder* decoder, const char* file);
 
 int mediaDecoderReadFrame(MediaDecoder* decoder);
 
