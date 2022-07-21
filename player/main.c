@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 
 #if defined(CONFIG_ENABLE_UI)
 // #define SDL_MAIN_HANDLED
@@ -11,6 +13,10 @@
 
 #include "player.h"
 #include "media_decoder.h"
+
+#define DEBUG_DUMP_YUV 1
+#define DEBUG_DUMP_H264 1
+#define DEBUG_DUMP_AAC 1
 
 // New SDLv2
 // https://stackoverflow.com/questions/17579286/sdl2-0-alternative-for-sdl-overlay
@@ -68,6 +74,14 @@ void sdlInit(void)
 #endif
 }
 
+void onDecodedFrame(MediaDecoder *decoder, int stream, const uint8_t *data, int size) {
+    printf("onDecodedFrame: stream=%d data=%p size=%d\n", stream, data, size);
+}
+
+void onRawPacket(MediaDecoder *decoder, int stream, const uint8_t *data, int size) {
+    printf("onRawPacket: stream=%d data=%p size=%d\n", stream, data, size);
+}
+
 int main() {
     int i;
     int fps;
@@ -95,29 +109,47 @@ int main() {
     int uvPitch;
 #endif
 
-    MediaDecoder* decoder;
+    MediaDecoder* decoder = NULL;
+    MediaStreamInfo streams[4] = {0};
 
     mediaDecoderInit();
 
     decoder = mediaDecoderCreate();
     if (!decoder) {
-        LOGE("create decoder failed");
+        printf("create decoder failed\n");
         return -1;
     }
 
     res = mediaDecoderOpen(decoder, MP4_FILE);
     if (res != 0) {
-        LOGE("video decoder open file %s failed: %d", MP4_FILE, res);
+        printf("video decoder open file %s failed: %d\n", MP4_FILE, res);
         return -1;
     }
 
-    for (;;) {
+    printf("streams count: %d\n", mediaDecoderStreams(decoder));
+    for (i = 0; i < mediaDecoderStreams(decoder); ++i) {
+        MediaStreamInfo info;
+        mediaDecoderStreamInfo(decoder, i, &info);
+        if (info.type == MediaTypeVideo) {
+            printf("streams #%d type: Video\n", i);
+        } else if (info.type == MediaTypeAudio) {
+            printf("streams #%d type: Audio\n", i);
+        }
+    }
+
+    mediaDecoderSetOnRawPacket(decoder, onRawPacket);
+    mediaDecoderSetOnDecodedFrame(decoder, onDecodedFrame);
+
+    for (i = 0; i < 500; ++i) {
         res = mediaDecoderReadFrame(decoder);
         if (res <= 0) {
             break;
         }
     }
 
+    LOGD("decoder read frames complete, total frames=%d res=%d\n", i, res);
+
+    mediaDecoderDestroy(decoder);
 #if 0
     fyuv = av_frame_alloc();
     frgb = av_frame_alloc();

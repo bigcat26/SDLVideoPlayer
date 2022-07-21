@@ -14,12 +14,9 @@ extern "C" {
 }
 #endif
 
-#include "player.h"
 #include "media_decoder.h"
+#include "player.h"
 
-
-#define LOGD MLOGD
-#define LOGE MLOGE
 
 #if 0
 void SaveFrame(AVFrame *pFrame, int width, int height, int index, int bpp)
@@ -67,18 +64,33 @@ void SaveFrame(AVFrame *pFrame, int width, int height, int index, int bpp)
 struct MediaDecoder {
     AVFormatContext* afc;
     // AVCodec* codec[MEDIA_DECODER_MAX_STREAMS];
-    MediaDecoderOnPacket onRawPacket;
+    MEDIADECODER_ONPACKET onRawPacket;
+    MEDIADECODER_ONPACKET onDecodedFrame;
 #if MEDIA_DECODER_ENABLE_DECODER
     AVCodecContext* codecCtx[MEDIA_DECODER_MAX_STREAMS];
 #endif
 #if MEDIA_DECODER_ENABLE_BSF
     AVBSFContext* bsf[MEDIA_DECODER_MAX_STREAMS];
-    MediaDecoderOnPacket onFilteredPacket;
+    MEDIADECODER_ONPACKET onFilteredPacket;
 #endif
 };
 
 void mediaDecoderDestroy(MediaDecoder* decoder) {
+    int i;
     if (decoder) {
+        for (i = 0; i < MEDIA_DECODER_MAX_STREAMS; ++i) {
+            if (decoder->bsf[i]) {
+                av_bsf_free(&decoder->bsf[i]);
+            }
+        }
+        for (i = 0; i < MEDIA_DECODER_MAX_STREAMS; ++i) {
+            if (decoder->codecCtx[i]) {
+                avcodec_free_context(&decoder->codecCtx[i]);
+            }
+        }
+        if (decoder->afc) {
+            avformat_close_input(&decoder->afc);
+        }
         free(decoder);
     }
 }
@@ -151,24 +163,21 @@ int mediaDecoderOpen(MediaDecoder* decoder, const char* file) {
     int res;
 
     res = avformat_open_input(&decoder->afc, file, NULL, NULL);
-    MLOGD("avformat_open_input res=%d\n", res);
     if (res != 0) {
         return mediaDecoderDumpError("unable to open input", res);
     }
 
     res = avformat_find_stream_info(decoder->afc, NULL);
-    MLOGD("avformat_find_stream_info res=%d\n", res);
     if (res < 0) {
         return mediaDecoderDumpError("unable to find stream info", res);
     }
 
-    MLOGD("nb_streams=%d\n", decoder->afc->nb_streams);
     for (i = 0; i < decoder->afc->nb_streams; ++i) {
         AVCodecContext* acc = decoder->afc->streams[i]->codec;
         AVCodec* codec = avcodec_find_decoder(acc->codec_id);
         LOGD("find decoder for codec tag: %c%c%c%c result %p\n",
              acc->codec_tag & 0xff, (acc->codec_tag >> 8) & 0xff,
-                acc->codec_tag & 0xff, (acc->codec_tag >> 8) & 0xff, 
+             acc->codec_tag & 0xff, (acc->codec_tag >> 8) & 0xff,
              acc->codec_tag & 0xff, (acc->codec_tag >> 8) & 0xff,
              (acc->codec_tag >> 16) & 0xff, acc->codec_tag >> 24,
              codec);
@@ -185,6 +194,47 @@ int mediaDecoderOpen(MediaDecoder* decoder, const char* file) {
     }
 
     return 0;
+}
+
+int mediaDecoderStreams(MediaDecoder* decoder) {
+    if (!decoder || !decoder->afc) {
+        return -1;
+    }
+    return decoder->afc->nb_streams;
+}
+
+int mediaDecoderStreamInfo(MediaDecoder* decoder, int streamId, MediaStreamInfo* info) {
+    AVStream *stream;
+    if (!decoder || !decoder->afc) {
+        return -1;
+    }
+
+    stream = decoder->afc->streams[streamId];
+    if (stream->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+        info->type = MediaTypeVideo;
+    } else if (stream->codec->codec_type == AVMEDIA_TYPE_AUDIO) {
+        info->type = MediaTypeAudio;
+    } else {
+        info->type = MediaTypeUnknown;
+        return 0; 
+    }
+    return 0;
+}
+
+void mediaDecoderSetOnRawPacket(MediaDecoder* decoder, MEDIADECODER_ONPACKET onRawPacket) {
+    decoder->onRawPacket = onRawPacket;
+}
+
+MEDIADECODER_ONPACKET mediaDecoderGetOnRawPacket(MediaDecoder* decoder) {
+    return decoder->onRawPacket;
+}
+
+void mediaDecoderSetOnDecodedFrame(MediaDecoder* decoder, MEDIADECODER_ONPACKET onDecodedFrame) {
+    decoder->onDecodedFrame = onDecodedFrame;
+}
+
+MEDIADECODER_ONPACKET mediaDecoderGetOnDecodedFrame(MediaDecoder* decoder) {
+    return decoder->onDecodedFrame;
 }
 
 enum AVMediaType mediaDecoderStreamCodec(MediaDecoder* decoder, int streamId) {
@@ -210,7 +260,6 @@ static void mediaDecoderProcessDecode(MediaDecoder* decoder, AVPacket* pkt, int 
     int res;
     AVFrame* frame = NULL;
 
-    LOGD("avcodec_send_packet streamId=%d codecCtx=%p\n", streamId, decoder->codecCtx[streamId]);
     if (decoder->codecCtx[streamId] == NULL) {
         return;
     }
@@ -227,6 +276,7 @@ static void mediaDecoderProcessDecode(MediaDecoder* decoder, AVPacket* pkt, int 
         mediaDecoderDumpError("codec send packet error", res);
         goto cleanup;
     }
+    av_packet_unref(pkt);
 
     for (;;) {
         res = avcodec_receive_frame(decoder->codecCtx[streamId], frame);
@@ -237,8 +287,10 @@ static void mediaDecoderProcessDecode(MediaDecoder* decoder, AVPacket* pkt, int 
             break;
         }
 
-        // TODO: do something with frame...
-        LOGD("TODO: paint the frame...\n");
+        if (decoder->onDecodedFrame) {
+            decoder->onDecodedFrame(decoder, streamId, frame->data, frame->pkt_size);
+        }
+
         av_frame_unref(frame);
     }
 

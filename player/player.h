@@ -5,7 +5,7 @@
 #ifdef WIN32
 #define MP4_FILE "D:\\code\\sample.mp4"
 #else
-#define MP4_FILE "~/Downloads/Incoming/video.mp4"
+#define MP4_FILE "/root/work/SDLVideoPlayer/sample.mp4"
 #endif
 
 #ifdef WIN32
