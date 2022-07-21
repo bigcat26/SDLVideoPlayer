@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.16)
 project(VideoPlayer)
 
 include(cmake/conan.cmake)
@@ -24,6 +24,8 @@ conan_cmake_configure(
   REQUIRES
     ${CONAN_SDL}
     ${CONAN_FFMPEG}
+    openssl/1.1.1o
+    libiconv/1.17
   GENERATORS 
     cmake_find_package
   IMPORTS
