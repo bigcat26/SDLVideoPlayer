@@ -114,12 +114,6 @@ int mediaDecoderInitDecoder(MediaDecoder* decoder, int streamId, AVCodec* codec)
 #if MEDIA_DECODER_ENABLE_DECODER
     int res;
 
-    decoder->avcc[streamId] = avcodec_alloc_context3(codec);
-    if (!decoder->avcc[streamId]) {
-        LOGE("alloc decoder context error");
-        return -1;
-    }
-
     res = avcodec_open2(decoder->avcc[streamId], codec, NULL);
     if (res < 0) {
         mediaDecoderDumpError("codec open error", res);
@@ -151,7 +145,7 @@ int mediaDecoderInitBitstreamFilter(MediaDecoder* decoder, int streamId, AVCodec
                 decoder->bsf[streamId]->par_in,
                 decoder->afc->streams[streamId]->codecpar);
             res = av_bsf_init(decoder->bsf[streamId]);
-            LOGD("stream #%d bsf init res=%d\n", res);
+            LOGD("stream #%d bsf init res=%d\n", streamId, res);
         }
     }
 #endif
@@ -173,15 +167,23 @@ int mediaDecoderOpen(MediaDecoder* decoder, const char* file) {
     }
 
     for (i = 0; i < decoder->afc->nb_streams; ++i) {
-        AVCodecContext* acc = decoder->afc->streams[i]->codec;
-        AVCodec* codec = avcodec_find_decoder(acc->codec_id);
-        LOGD("find decoder for codec tag: %c%c%c%c result %p\n",
-             acc->codec_tag & 0xff, (acc->codec_tag >> 8) & 0xff,
-             acc->codec_tag & 0xff, (acc->codec_tag >> 8) & 0xff,
-             acc->codec_tag & 0xff, (acc->codec_tag >> 8) & 0xff,
-             (acc->codec_tag >> 16) & 0xff, acc->codec_tag >> 24,
-             codec);
+        AVCodecParameters* codecpar = decoder->afc->streams[i]->codecpar;
+        decoder->avcc[i] = avcodec_alloc_context3(NULL);
+        if (!decoder->avcc[i]) {
+            LOGE("alloc decoder context error");
+            return -1;
+        }
 
+        res = avcodec_parameters_to_context(decoder->avcc[i], codecpar);
+        if (res < 0) {
+            return mediaDecoderDumpError("unable to copy codec parameters", res);
+        }
+
+        AVCodec* codec = avcodec_find_decoder(codecpar->codec_id);
+        LOGD("find decoder for codec tag: %c%c%c%c result %p\n",
+             codecpar->codec_tag & 0xff, (codecpar->codec_tag >> 8) & 0xff,
+             (codecpar->codec_tag >> 16) & 0xff, codecpar->codec_tag >> 24,
+             codec);
         if (codec) {
             if (i < MEDIA_DECODER_MAX_STREAMS) {
                 // decoder->codec[i] = codec;
@@ -212,11 +214,18 @@ int mediaDecoderStreamInfo(MediaDecoder* decoder, int streamId, MediaStreamInfo*
 
     stream = decoder->afc->streams[streamId];
     avcc = decoder->avcc[streamId];
-    if (stream->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+    if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
         info->type = MediaTypeVideo;
+        info->u.video.width = avcc->width;
+        info->u.video.height = avcc->height;
         
-    } else if (stream->codec->codec_type == AVMEDIA_TYPE_AUDIO) {
+        // int fps = st->avg_frame_rate.den && st->avg_frame_rate.num;
+        // int tbr = st->r_frame_rate.den && st->r_frame_rate.num;
+        // int tbn = st->time_base.den && st->time_base.num;
+
+    } else if (stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
         info->type = MediaTypeAudio;
+        info->u.audio.bitRate = avcc->bit_rate;
     } else {
         info->type = MediaTypeUnknown;
         return 0; 

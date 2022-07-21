@@ -123,6 +123,8 @@ int main() {
         return -1;
     }
 
+    mediaDecoderDumpFormat(decoder, MP4_FILE);
+
     printf("streams count: %d\n", mediaDecoderStreams(decoder));
     for (i = 0; i < mediaDecoderStreams(decoder); ++i) {
         MediaStreamInfo info;
