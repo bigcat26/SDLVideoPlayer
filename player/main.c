@@ -21,9 +21,6 @@
 // New SDLv2
 // https://stackoverflow.com/questions/17579286/sdl2-0-alternative-for-sdl-overlay
 
-// SDLv1 -> SDLv2 Migration Guide
-// https://wiki.libsdl.org/MigrationGuide#SDL_1.2_to_2.0_Migration_Guide
-
 #if 0
 void SaveFrame(AVFrame *pFrame, int width, int height, int index, int bpp)
 {

@@ -7,7 +7,13 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Debug")
 endif(NOT CMAKE_BUILD_TYPE)
 
-option(CONFIG_ENABLE_UI "import sdl from conan" ON)
+if(WIN32)
+  set(CONFIG_ENABLE_UI_DEFAULT ON)
+else()
+  set(CONFIG_ENABLE_UI_DEFAULT OFF)
+endif()
+
+option(CONFIG_ENABLE_UI "import sdl from conan" ${CONFIG_ENABLE_UI_DEFAULT})
 option(CONFIG_USE_CONAN_FFMPEG "import ffmpeg from conan" ON)
 
 if(CONFIG_USE_CONAN_FFMPEG)
@@ -24,7 +30,7 @@ conan_cmake_configure(
   REQUIRES
     ${CONAN_SDL}
     ${CONAN_FFMPEG}
-    openssl/1.1.1o
+    openssl/1.1.1l
     libiconv/1.17
   GENERATORS 
     cmake_find_package
@@ -44,7 +50,16 @@ conan_cmake_install(PATH_OR_REFERENCE .
                       ffmpeg:avfilter=False
                       ffmpeg:swresample=False
                       ffmpeg:with_freetype=False
+                      ffmpeg:with_zlib=False
+                      ffmpeg:with_bzip2=False
+                      ffmpeg:with_lzma=False
+                      ffmpeg:with_libiconv=False
+                      ffmpeg:with_opus=False
+                      ffmpeg:with_openjpeg=False
+                      ffmpeg:with_vorbis=False
+                      ffmpeg:with_libmp3lame=False
                       ffmpeg:with_xcb=False
+                      ffmpeg:with_sdl=False
                       ffmpeg:with_programs=False
                       ffmpeg:with_pulse=False
                       ffmpeg:with_libalsa=False

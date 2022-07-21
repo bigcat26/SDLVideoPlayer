@@ -67,7 +67,7 @@ struct MediaDecoder {
     MEDIADECODER_ONPACKET onRawPacket;
     MEDIADECODER_ONPACKET onDecodedFrame;
 #if MEDIA_DECODER_ENABLE_DECODER
-    AVCodecContext* codecCtx[MEDIA_DECODER_MAX_STREAMS];
+    AVCodecContext* avcc[MEDIA_DECODER_MAX_STREAMS];
 #endif
 #if MEDIA_DECODER_ENABLE_BSF
     AVBSFContext* bsf[MEDIA_DECODER_MAX_STREAMS];
@@ -84,8 +84,8 @@ void mediaDecoderDestroy(MediaDecoder* decoder) {
             }
         }
         for (i = 0; i < MEDIA_DECODER_MAX_STREAMS; ++i) {
-            if (decoder->codecCtx[i]) {
-                avcodec_free_context(&decoder->codecCtx[i]);
+            if (decoder->avcc[i]) {
+                avcodec_free_context(&decoder->avcc[i]);
             }
         }
         if (decoder->afc) {
@@ -114,13 +114,13 @@ int mediaDecoderInitDecoder(MediaDecoder* decoder, int streamId, AVCodec* codec)
 #if MEDIA_DECODER_ENABLE_DECODER
     int res;
 
-    decoder->codecCtx[streamId] = avcodec_alloc_context3(codec);
-    if (!decoder->codecCtx[streamId]) {
+    decoder->avcc[streamId] = avcodec_alloc_context3(codec);
+    if (!decoder->avcc[streamId]) {
         LOGE("alloc decoder context error");
         return -1;
     }
 
-    res = avcodec_open2(decoder->codecCtx[streamId], codec, NULL);
+    res = avcodec_open2(decoder->avcc[streamId], codec, NULL);
     if (res < 0) {
         mediaDecoderDumpError("codec open error", res);
         return res;
@@ -205,13 +205,16 @@ int mediaDecoderStreams(MediaDecoder* decoder) {
 
 int mediaDecoderStreamInfo(MediaDecoder* decoder, int streamId, MediaStreamInfo* info) {
     AVStream *stream;
+    AVCodecContext *avcc;
     if (!decoder || !decoder->afc) {
         return -1;
     }
 
     stream = decoder->afc->streams[streamId];
+    avcc = decoder->avcc[streamId];
     if (stream->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
         info->type = MediaTypeVideo;
+        
     } else if (stream->codec->codec_type == AVMEDIA_TYPE_AUDIO) {
         info->type = MediaTypeAudio;
     } else {
@@ -260,7 +263,7 @@ static void mediaDecoderProcessDecode(MediaDecoder* decoder, AVPacket* pkt, int 
     int res;
     AVFrame* frame = NULL;
 
-    if (decoder->codecCtx[streamId] == NULL) {
+    if (decoder->avcc[streamId] == NULL) {
         return;
     }
 
@@ -270,7 +273,7 @@ static void mediaDecoderProcessDecode(MediaDecoder* decoder, AVPacket* pkt, int 
         return;
     }
 
-    res = avcodec_send_packet(decoder->codecCtx[streamId], pkt);
+    res = avcodec_send_packet(decoder->avcc[streamId], pkt);
     if (res != 0) {
         LOGE("avcodec_send_packet failed streamId=%d\n", pkt->stream_index);
         mediaDecoderDumpError("codec send packet error", res);
@@ -279,7 +282,7 @@ static void mediaDecoderProcessDecode(MediaDecoder* decoder, AVPacket* pkt, int 
     av_packet_unref(pkt);
 
     for (;;) {
-        res = avcodec_receive_frame(decoder->codecCtx[streamId], frame);
+        res = avcodec_receive_frame(decoder->avcc[streamId], frame);
         if (res == AVERROR(EAGAIN) || res == AVERROR_EOF) {
             break;
         } else if (res < 0) {
