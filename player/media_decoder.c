@@ -7,6 +7,7 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
 #include <libavutil/error.h>
+#include <libavutil/buffer.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/mem.h>
 
@@ -186,7 +187,6 @@ int mediaDecoderOpen(MediaDecoder* decoder, const char* file) {
              codec);
         if (codec) {
             if (i < MEDIA_DECODER_MAX_STREAMS) {
-                // decoder->codec[i] = codec;
                 mediaDecoderInitDecoder(decoder, i, codec);
                 mediaDecoderInitBitstreamFilter(decoder, i, codec);
             } else {
@@ -205,6 +205,43 @@ int mediaDecoderStreams(MediaDecoder* decoder) {
     return decoder->afc->nb_streams;
 }
 
+int mediaDecoderSaveYUVImage(const char *file, AVFrame *frame)
+{
+    FILE *fp;
+    uint32_t pitchY = frame->linesize[0];
+    uint32_t pitchU = frame->linesize[1];
+    uint32_t pitchV = frame->linesize[2];
+    uint8_t *avY = frame->data[0];
+    uint8_t *avU = frame->data[1];
+    uint8_t *avV = frame->data[2];
+
+    fp = fopen(file, "wb");
+    if (!fp) {
+        LOGE("open file %s failed: %s", file, strerror(errno));
+        return -1;
+    }
+
+    for (uint32_t i = 0; i < frame->height; i++) {
+        fwrite(avY, frame->width, 1, fp);
+        avY += pitchY;
+    }
+
+    for (uint32_t i = 0; i < frame->height/2; i++) {
+        fwrite(avU, frame->width / 2, 1, fp);
+        avU += pitchU;
+    }
+
+    for (uint32_t i = 0; i < frame->height/2; i++) {
+        fwrite(avV, frame->width / 2, 1, fp);
+        avV += pitchV;
+    }
+
+    printf("file size: %ld\n", ftell(fp));
+
+    fclose(fp);
+    return 0;
+}
+
 int mediaDecoderStreamInfo(MediaDecoder* decoder, int streamId, MediaStreamInfo* info) {
     AVStream *stream;
     AVCodecContext *avcc;
@@ -218,7 +255,8 @@ int mediaDecoderStreamInfo(MediaDecoder* decoder, int streamId, MediaStreamInfo*
         info->type = MediaTypeVideo;
         info->u.video.width = avcc->width;
         info->u.video.height = avcc->height;
-        
+        info->u.video.pixelFormat = avcc->pix_fmt;
+        // info->u.video.fps = 
         // int fps = st->avg_frame_rate.den && st->avg_frame_rate.num;
         // int tbr = st->r_frame_rate.den && st->r_frame_rate.num;
         // int tbn = st->time_base.den && st->time_base.num;
@@ -247,21 +285,6 @@ void mediaDecoderSetOnDecodedFrame(MediaDecoder* decoder, MEDIADECODER_ONPACKET 
 
 MEDIADECODER_ONPACKET mediaDecoderGetOnDecodedFrame(MediaDecoder* decoder) {
     return decoder->onDecodedFrame;
-}
-
-enum AVMediaType mediaDecoderStreamCodec(MediaDecoder* decoder, int streamId) {
-    if (streamId < decoder->afc->nb_streams) {
-        return decoder->afc->streams[streamId]->codec->codec_type;
-    }
-    return AVMEDIA_TYPE_UNKNOWN;
-}
-
-int mediaDecoderStreamIsVideo(MediaDecoder* decoder, int streamId) {
-    return mediaDecoderStreamCodec(decoder, streamId) == AVMEDIA_TYPE_VIDEO;
-}
-
-int mediaDecoderStreamIsAudio(MediaDecoder* decoder, int streamId) {
-    return mediaDecoderStreamCodec(decoder, streamId) == AVMEDIA_TYPE_AUDIO;
 }
 
 void mediaDecoderDumpFormat(MediaDecoder* decoder, const char* file) {
@@ -298,6 +321,21 @@ static void mediaDecoderProcessDecode(MediaDecoder* decoder, AVPacket* pkt, int 
             mediaDecoderDumpError("bsf receive packet error", res);
             break;
         }
+
+        mediaDecoderSaveYUVImage("sample.yuv", frame);
+
+        AVBufferRef *buf = NULL;
+        buf = av_frame_get_plane_buffer(frame, 0);
+        printf("plane 0 size: %d\n", buf->size);
+        av_buffer_unref(&buf);
+        buf = av_frame_get_plane_buffer(frame, 1);
+        printf("plane 1 size: %d\n", buf->size);
+        av_buffer_unref(&buf);
+        buf = av_frame_get_plane_buffer(frame, 2);
+        printf("plane 2 size: %d\n", buf->size);
+        av_buffer_unref(&buf);
+        buf = av_frame_get_plane_buffer(frame, 3);
+        av_buffer_unref(&buf);
 
         if (decoder->onDecodedFrame) {
             decoder->onDecodedFrame(decoder, streamId, frame->data, frame->pkt_size);

@@ -13,8 +13,10 @@ typedef struct MediaStreamInfo {
     MediaType type;
     union {
         struct {
+            int fps;
             int width;
             int height;
+            int pixelFormat;
         } video;
 
         struct {
@@ -46,10 +48,6 @@ MEDIADECODER_ONPACKET mediaDecoderGetOnRawPacket(MediaDecoder* decoder);
 void mediaDecoderSetOnDecodedFrame(MediaDecoder* decoder, MEDIADECODER_ONPACKET onDecodedFrame);
 
 MEDIADECODER_ONPACKET mediaDecoderGetOnDecodedFrame(MediaDecoder* decoder);
-
-// int mediaDecoderStreamIsVideo(MediaDecoder* decoder, int streamId);
-
-// int mediaDecoderStreamIsAudio(MediaDecoder* decoder, int streamId);
 
 void mediaDecoderDumpFormat(MediaDecoder* decoder, const char* file);
 

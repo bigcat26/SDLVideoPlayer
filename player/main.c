@@ -130,9 +130,13 @@ int main() {
         MediaStreamInfo info;
         mediaDecoderStreamInfo(decoder, i, &info);
         if (info.type == MediaTypeVideo) {
-            printf("streams #%d type: Video\n", i);
+            printf("Video stream: #%d\n", i);
+            printf("  Width: %d\n", info.u.video.width);
+            printf("  Height: %d\n", info.u.video.height);
         } else if (info.type == MediaTypeAudio) {
-            printf("streams #%d type: Audio\n", i);
+            printf("Audio stream: #%d\n", i);
+            printf("  BitRate: %d\n", info.u.audio.bitRate);
+            printf("  SampleRate: %d\n", info.u.audio.sampleRate);
         }
     }
 

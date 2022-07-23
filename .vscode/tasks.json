@@ -9,6 +9,15 @@
                 "isDefault": true
             }
         },
+        {
+            "label": "valgrind",
+            "type": "shell",
+            "command": "valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind-out.txt ${workspaceFolder}/.build/bin/player",
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            }
+        },
     ],
     "version": "2.0.0"
 }
