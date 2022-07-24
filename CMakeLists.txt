@@ -26,6 +26,25 @@ endif()
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib)
 
+if(WIN32)
+  set(CONAN_FFMPEG_SETTINGS
+    ffmpeg:build_type=Debug
+  )
+else()
+  set(CONAN_FFMPEG_OPTIONS
+    ffmpeg:avdevice=False
+    ffmpeg:avfilter=False
+    ffmpeg:swresample=False
+    ffmpeg:with_programs=False
+    ffmpeg:with_libalsa=False
+    ffmpeg:with_pulse=False
+    ffmpeg:with_vaapi=False
+    ffmpeg:with_vdpau=False
+    ffmpeg:with_vulkan=False
+    ffmpeg:with_xcb=False
+  )
+endif()
+
 conan_cmake_configure(
   REQUIRES
     ${CONAN_SDL}
@@ -42,13 +61,12 @@ conan_cmake_autodetect(settings)
 conan_cmake_install(PATH_OR_REFERENCE .
                     BUILD missing
                     SETTINGS 
+                      ${CONAN_FFMPEG_SETTINGS}
                       build_type=Release
                     OPTIONS
                       # ffmpeg:with_libfdk_aac=True
-                      ffmpeg:avdevice=False
+                      ${CONAN_FFMPEG_OPTIONS}
                       ffmpeg:postproc=False
-                      ffmpeg:avfilter=False
-                      ffmpeg:swresample=False
                       ffmpeg:with_freetype=False
                       ffmpeg:with_zlib=False
                       ffmpeg:with_bzip2=False
@@ -58,15 +76,8 @@ conan_cmake_install(PATH_OR_REFERENCE .
                       ffmpeg:with_openjpeg=False
                       ffmpeg:with_vorbis=False
                       ffmpeg:with_libmp3lame=False
-                      ffmpeg:with_xcb=False
                       ffmpeg:with_sdl=False
-                      ffmpeg:with_programs=False
-                      ffmpeg:with_pulse=False
-                      ffmpeg:with_libalsa=False
                       ffmpeg:with_libvpx=False
-                      ffmpeg:with_vaapi=False
-                      ffmpeg:with_vdpau=False
-                      ffmpeg:with_vulkan=False
                       ffmpeg:with_libwebp=False
 )
 

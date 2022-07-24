@@ -58,7 +58,7 @@ void SaveFrame(AVFrame *pFrame, int width, int height, int index, int bpp)
 }
 #endif
 
-#define MEDIA_DECODER_ENABLE_BSF 1
+#define MEDIA_DECODER_ENABLE_BSF 0
 #define MEDIA_DECODER_ENABLE_DECODER 1
 #define MEDIA_DECODER_MAX_STREAMS 2
 
@@ -80,9 +80,11 @@ void mediaDecoderDestroy(MediaDecoder* decoder) {
     int i;
     if (decoder) {
         for (i = 0; i < MEDIA_DECODER_MAX_STREAMS; ++i) {
+#if MEDIA_DECODER_ENABLE_BSF
             if (decoder->bsf[i]) {
                 av_bsf_free(&decoder->bsf[i]);
             }
+#endif
         }
         for (i = 0; i < MEDIA_DECODER_MAX_STREAMS; ++i) {
             if (decoder->avcc[i]) {
@@ -124,15 +126,15 @@ int mediaDecoderInitDecoder(MediaDecoder* decoder, int streamId, AVCodec* codec)
     return 0;
 }
 
-int mediaDecoderInitBitstreamFilter(MediaDecoder* decoder, int streamId, AVCodec* codec) {
+int mediaDecoderInitBitstreamFilter(MediaDecoder* decoder, int streamId, enum AVCodecID codecId) {
 #if MEDIA_DECODER_ENABLE_BSF
     int res;
     const AVBitStreamFilter* bsf = NULL;
 
-    if (codec->id == AV_CODEC_ID_H264) {
+    if (codecId == AV_CODEC_ID_H264) {
         bsf = av_bsf_get_by_name("h264_mp4toannexb");
         LOGD("stream #%d codec id is h264, bsf=%p\n", streamId, bsf);
-    } else if (codec->id == AV_CODEC_ID_HEVC) {
+    } else if (codecId == AV_CODEC_ID_HEVC) {
         bsf = av_bsf_get_by_name("hevc_mp4toannexb");
         LOGD("stream #%d codec id is hevc, bsf=%p\n", streamId, bsf);
     }
@@ -188,7 +190,7 @@ int mediaDecoderOpen(MediaDecoder* decoder, const char* file) {
         if (codec) {
             if (i < MEDIA_DECODER_MAX_STREAMS) {
                 mediaDecoderInitDecoder(decoder, i, codec);
-                mediaDecoderInitBitstreamFilter(decoder, i, codec);
+                mediaDecoderInitBitstreamFilter(decoder, i, codecpar->codec_id);
             } else {
                 LOGE("warn: too many streams %d\n", i);
             }
@@ -324,6 +326,7 @@ static void mediaDecoderProcessDecode(MediaDecoder* decoder, AVPacket* pkt, int 
 
         mediaDecoderSaveYUVImage("sample.yuv", frame);
 
+#if 0
         AVBufferRef *buf = NULL;
         buf = av_frame_get_plane_buffer(frame, 0);
         printf("plane 0 size: %d\n", buf->size);
@@ -340,6 +343,7 @@ static void mediaDecoderProcessDecode(MediaDecoder* decoder, AVPacket* pkt, int 
         if (decoder->onDecodedFrame) {
             decoder->onDecodedFrame(decoder, streamId, frame->data, frame->pkt_size);
         }
+#endif
 
         av_frame_unref(frame);
     }
@@ -359,12 +363,17 @@ static void mediaDecoderProcessBitstreamFilter(MediaDecoder* decoder, AVPacket* 
         return;
     }
 
+#if defined(MEDIA_DECODER_ENABLE_BSF) && MEDIA_DECODER_ENABLE_BSF
     if (decoder->bsf[streamId] == NULL) {
+#endif
         mediaDecoderProcessDecode(decoder, pkt, streamId);
         return;
+#if defined(MEDIA_DECODER_ENABLE_BSF) && MEDIA_DECODER_ENABLE_BSF
     }
+#endif
 
-    filteredPacket = av_packet_alloc();
+#if defined(MEDIA_DECODER_ENABLE_BSF) && MEDIA_DECODER_ENABLE_BSF
+        filteredPacket = av_packet_alloc();
     if (!filteredPacket) {
         LOGE("av_packet_alloc failed");
         return;
@@ -397,6 +406,7 @@ cleanup:
     if (filteredPacket) {
         av_packet_free(&filteredPacket);
     }
+#endif
 }
 
 int mediaDecoderReadFrame(MediaDecoder* decoder) {
