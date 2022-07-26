@@ -207,15 +207,15 @@ int mediaDecoderStreams(MediaDecoder* decoder) {
     return decoder->afc->nb_streams;
 }
 
-int mediaDecoderSaveYUVImage(const char *file, AVFrame *frame)
+int mediaDecoderSavePlanar(const char *file, AVFrame *frame, int uv)
 {
     FILE *fp;
     uint32_t pitchY = frame->linesize[0];
-    uint32_t pitchU = frame->linesize[1];
-    uint32_t pitchV = frame->linesize[2];
+    uint32_t pitchU = uv ? frame->linesize[1] : frame->linesize[2];
+    uint32_t pitchV = uv ? frame->linesize[2] : frame->linesize[1];
     uint8_t *avY = frame->data[0];
-    uint8_t *avU = frame->data[1];
-    uint8_t *avV = frame->data[2];
+    uint8_t *avU = uv ? frame->data[1] : frame->data[2];
+    uint8_t *avV = uv ? frame->data[2] : frame->data[1];
 
     fp = fopen(file, "wb");
     if (!fp) {
@@ -224,21 +224,55 @@ int mediaDecoderSaveYUVImage(const char *file, AVFrame *frame)
     }
 
     for (uint32_t i = 0; i < frame->height; i++) {
-        fwrite(avY, frame->width, 1, fp);
+        fwrite(avY, 1, frame->width, fp);
         avY += pitchY;
     }
 
-    for (uint32_t i = 0; i < frame->height/2; i++) {
-        fwrite(avU, frame->width / 2, 1, fp);
+    for (uint32_t i = 0; i < frame->height / 2; i++) {
+        fwrite(avU, 1, frame->width / 2, fp);
         avU += pitchU;
     }
 
-    for (uint32_t i = 0; i < frame->height/2; i++) {
-        fwrite(avV, frame->width / 2, 1, fp);
+    for (uint32_t i = 0; i < frame->height / 2; i++) {
+        fwrite(avV, 1, frame->width / 2, fp);
         avV += pitchV;
     }
 
-    printf("file size: %ld\n", ftell(fp));
+    printf("file %s size: %ld\n", file, ftell(fp));
+
+    fclose(fp);
+    return 0;
+}
+
+int mediaDecoderSaveSemiPlanar(const char *file, AVFrame *frame, int uv)
+{
+    FILE *fp;
+    uint32_t pitchY = frame->linesize[0];
+    uint32_t pitchU = uv ? frame->linesize[1] : frame->linesize[2];
+    uint32_t pitchV = uv ? frame->linesize[2] : frame->linesize[1];
+    uint8_t *avY = frame->data[0];
+    uint8_t *avU = uv ? frame->data[1] : frame->data[2];
+    uint8_t *avV = uv ? frame->data[2] : frame->data[1];
+
+    fp = fopen(file, "wb");
+    if (!fp) {
+        LOGE("open file %s failed: %s", file, strerror(errno));
+        return -1;
+    }
+
+    for (uint32_t i = 0; i < frame->height; i++) {
+        fwrite(avY, 1, frame->width, fp);
+        avY += pitchY;
+    }
+
+    for (uint32_t i = 0; i < frame->height / 2; i++) {
+        for (uint32_t j = 0; j < frame->width / 2; j++) {
+            fwrite(avY++, 1, 1, fp);
+            fwrite(avU++, 1, 1, fp);
+        }
+    }
+
+    printf("file %s size: %ld\n", file, ftell(fp));
 
     fclose(fp);
     return 0;
@@ -324,7 +358,10 @@ static void mediaDecoderProcessDecode(MediaDecoder* decoder, AVPacket* pkt, int 
             break;
         }
 
-        mediaDecoderSaveYUVImage("sample.yuv", frame);
+//        mediaDecoderSavePlanar("sample.yu420p", frame, 1);
+//        mediaDecoderSavePlanar("sample.yv420p", frame, 0);
+//        mediaDecoderSaveSemiPlanar("sample.yu420sp", frame, 1);
+//        mediaDecoderSaveSemiPlanar("sample.yv420sp", frame, 0);
 
 #if 0
         AVBufferRef *buf = NULL;
