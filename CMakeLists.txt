@@ -97,4 +97,7 @@ if(CONFIG_ENABLE_UI)
   find_package(SDL2 REQUIRED)
 endif()
 
+include_directories(include)
+
+add_subdirectory(muxer)
 add_subdirectory(player)
