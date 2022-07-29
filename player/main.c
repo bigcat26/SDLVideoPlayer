@@ -11,7 +11,6 @@
 #include <libswscale/swscale.h>
 #endif
 
-#include "player.h"
 #include "media_decoder.h"
 
 #define DEBUG_DUMP_YUV 1
@@ -71,11 +70,12 @@ void sdlInit(void)
 #endif
 }
 
-void onDecodedFrame(MediaDecoder *decoder, int stream, const uint8_t *data, int size) {
-    printf("onDecodedFrame: stream=%d data=%p size=%d\n", stream, data, size);
+
+int onDecodedFrame(MediaDecoder *decoder, int stream, uint8_t lines, const int *linesize, const uint8_t **data) {
+    printf("onDecodedFrame: stream=%d data=%p lines=%d\n", stream, data, lines);
 }
 
-void onRawPacket(MediaDecoder *decoder, int stream, const uint8_t *data, int size) {
+int onRawPacket(MediaDecoder *decoder, int stream, const uint8_t *data, int size) {
     printf("onRawPacket: stream=%d data=%p size=%d\n", stream, data, size);
 }
 
@@ -107,7 +107,7 @@ int main() {
 #endif
 
     MediaDecoder* decoder = NULL;
-    MediaStreamInfo streams[4] = {0};
+    MP4MediaStreamInfo streams[4] = {0};
 
     mediaDecoderInit();
 
@@ -127,13 +127,13 @@ int main() {
 
     printf("streams count: %d\n", mediaDecoderStreams(decoder));
     for (i = 0; i < mediaDecoderStreams(decoder); ++i) {
-        MediaStreamInfo info;
+        MP4MediaStreamInfo info;
         mediaDecoderStreamInfo(decoder, i, &info);
-        if (info.type == MediaTypeVideo) {
+        if (info.type == MP4MediaTypeVideo) {
             printf("Video stream: #%d\n", i);
             printf("  Width: %d\n", info.u.video.width);
             printf("  Height: %d\n", info.u.video.height);
-        } else if (info.type == MediaTypeAudio) {
+        } else if (info.type == MP4MediaTypeAudio) {
             printf("Audio stream: #%d\n", i);
             printf("  BitRate: %d\n", info.u.audio.bitRate);
             printf("  SampleRate: %d\n", info.u.audio.sampleRate);

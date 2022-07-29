@@ -6,8 +6,8 @@ extern "C" {
 #include <libavcodec/bsf.h>
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
-#include <libavutil/error.h>
 #include <libavutil/buffer.h>
+#include <libavutil/error.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/mem.h>
 
@@ -15,12 +15,13 @@ extern "C" {
 }
 #endif
 
+#include <stdarg.h>
+
 #include "media_decoder.h"
-#include "player.h"
 
 
 #if 0
-void SaveFrame(AVFrame *pFrame, int width, int height, int index, int bpp)
+void SaveFrame(AVFrame* pFrame, int width, int height, int index, int bpp)
 {
     int y;
     BITMAPFILEHEADER bmpheader;
@@ -37,14 +38,14 @@ void SaveFrame(AVFrame *pFrame, int width, int height, int index, int bpp)
     bmpheader.bfReserved1 = 0;
     bmpheader.bfReserved2 = 0;
     bmpheader.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
-    bmpheader.bfSize = bmpheader.bfOffBits + width*height*bpp / 8;
+    bmpheader.bfSize = bmpheader.bfOffBits + width * height * bpp / 8;
     bmpinfo.biSize = sizeof(BITMAPINFOHEADER);
     bmpinfo.biWidth = width;
     bmpinfo.biHeight = height;
     bmpinfo.biPlanes = 1;
     bmpinfo.biBitCount = bpp;
     bmpinfo.biCompression = BI_RGB;
-    bmpinfo.biSizeImage = (width*bpp + 31) / 32 * 4 * height;
+    bmpinfo.biSizeImage = (width * bpp + 31) / 32 * 4 * height;
     bmpinfo.biXPelsPerMeter = 100;
     bmpinfo.biYPelsPerMeter = 100;
     bmpinfo.biClrUsed = 0;
@@ -53,7 +54,7 @@ void SaveFrame(AVFrame *pFrame, int width, int height, int index, int bpp)
     fwrite(&bmpinfo, sizeof(bmpinfo), 1, fp);
     // fwrite (pFrame->data[0], width*height*bpp/8, 1, fp);
     for (y = height - 1; y >= 0; y--)
-        fwrite(pFrame->data[0] + y*pFrame->linesize[0], 1, width * 3, fp);
+        fwrite(pFrame->data[0] + y * pFrame->linesize[0], 1, width * 3, fp);
     fclose(fp);
 }
 #endif
@@ -66,7 +67,7 @@ struct MediaDecoder {
     AVFormatContext* afc;
     // AVCodec* codec[MEDIA_DECODER_MAX_STREAMS];
     MEDIADECODER_ONPACKET onRawPacket;
-    MEDIADECODER_ONPACKET onDecodedFrame;
+    MEDIADECODER_ONFRAME onDecodedFrame;
 #if MEDIA_DECODER_ENABLE_DECODER
     AVCodecContext* avcc[MEDIA_DECODER_MAX_STREAMS];
 #endif
@@ -278,7 +279,7 @@ int mediaDecoderSaveSemiPlanar(const char *file, AVFrame *frame, int uv)
     return 0;
 }
 
-int mediaDecoderStreamInfo(MediaDecoder* decoder, int streamId, MediaStreamInfo* info) {
+int mediaDecoderStreamInfo(MediaDecoder* decoder, int streamId, MP4MediaStreamInfo* info) {
     AVStream *stream;
     AVCodecContext *avcc;
     if (!decoder || !decoder->afc) {
@@ -288,21 +289,21 @@ int mediaDecoderStreamInfo(MediaDecoder* decoder, int streamId, MediaStreamInfo*
     stream = decoder->afc->streams[streamId];
     avcc = decoder->avcc[streamId];
     if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
-        info->type = MediaTypeVideo;
+        info->type = MP4MediaTypeVideo;
         info->u.video.width = avcc->width;
         info->u.video.height = avcc->height;
         info->u.video.pixelFormat = avcc->pix_fmt;
-        // info->u.video.fps = 
+        // info->u.video.fps =
         // int fps = st->avg_frame_rate.den && st->avg_frame_rate.num;
         // int tbr = st->r_frame_rate.den && st->r_frame_rate.num;
         // int tbn = st->time_base.den && st->time_base.num;
 
     } else if (stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
-        info->type = MediaTypeAudio;
+        info->type = MP4MediaTypeAudio;
         info->u.audio.bitRate = avcc->bit_rate;
     } else {
-        info->type = MediaTypeUnknown;
-        return 0; 
+        info->type = MP4MediaTypeUnknown;
+        return 0;
     }
     return 0;
 }
@@ -315,11 +316,11 @@ MEDIADECODER_ONPACKET mediaDecoderGetOnRawPacket(MediaDecoder* decoder) {
     return decoder->onRawPacket;
 }
 
-void mediaDecoderSetOnDecodedFrame(MediaDecoder* decoder, MEDIADECODER_ONPACKET onDecodedFrame) {
+void mediaDecoderSetOnDecodedFrame(MediaDecoder* decoder, MEDIADECODER_ONFRAME onDecodedFrame) {
     decoder->onDecodedFrame = onDecodedFrame;
 }
 
-MEDIADECODER_ONPACKET mediaDecoderGetOnDecodedFrame(MediaDecoder* decoder) {
+MEDIADECODER_ONFRAME mediaDecoderGetOnDecodedFrame(MediaDecoder* decoder) {
     return decoder->onDecodedFrame;
 }
 
@@ -358,29 +359,9 @@ static void mediaDecoderProcessDecode(MediaDecoder* decoder, AVPacket* pkt, int 
             break;
         }
 
-//        mediaDecoderSavePlanar("sample.yu420p", frame, 1);
-//        mediaDecoderSavePlanar("sample.yv420p", frame, 0);
-//        mediaDecoderSaveSemiPlanar("sample.yu420sp", frame, 1);
-//        mediaDecoderSaveSemiPlanar("sample.yv420sp", frame, 0);
-
-#if 0
-        AVBufferRef *buf = NULL;
-        buf = av_frame_get_plane_buffer(frame, 0);
-        printf("plane 0 size: %d\n", buf->size);
-        av_buffer_unref(&buf);
-        buf = av_frame_get_plane_buffer(frame, 1);
-        printf("plane 1 size: %d\n", buf->size);
-        av_buffer_unref(&buf);
-        buf = av_frame_get_plane_buffer(frame, 2);
-        printf("plane 2 size: %d\n", buf->size);
-        av_buffer_unref(&buf);
-        buf = av_frame_get_plane_buffer(frame, 3);
-        av_buffer_unref(&buf);
-
         if (decoder->onDecodedFrame) {
-            decoder->onDecodedFrame(decoder, streamId, frame->data, frame->pkt_size);
+            decoder->onDecodedFrame(decoder, streamId, AV_NUM_DATA_POINTERS, frame->linesize, frame->data);
         }
-#endif
 
         av_frame_unref(frame);
     }
@@ -397,11 +378,13 @@ static void mediaDecoderProcessBitstreamFilter(MediaDecoder* decoder, AVPacket* 
     AVPacket* filteredPacket = NULL;
 
     if (streamId >= MEDIA_DECODER_MAX_STREAMS) {
+        LOGE("streamId(%d) > MEDIA_DECODER_MAX_STREAMS(%d)\n", streamId, MEDIA_DECODER_MAX_STREAMS);
         return;
     }
 
 #if defined(MEDIA_DECODER_ENABLE_BSF) && MEDIA_DECODER_ENABLE_BSF
     if (decoder->bsf[streamId] == NULL) {
+        LOGE("decoder->bsf[%d] == NULL\n", streamId);
 #endif
         mediaDecoderProcessDecode(decoder, pkt, streamId);
         return;
@@ -410,9 +393,9 @@ static void mediaDecoderProcessBitstreamFilter(MediaDecoder* decoder, AVPacket* 
 #endif
 
 #if defined(MEDIA_DECODER_ENABLE_BSF) && MEDIA_DECODER_ENABLE_BSF
-        filteredPacket = av_packet_alloc();
+    filteredPacket = av_packet_alloc();
     if (!filteredPacket) {
-        LOGE("av_packet_alloc failed");
+        LOGE("av_packet_alloc failed\n");
         return;
     }
 
@@ -431,9 +414,11 @@ static void mediaDecoderProcessBitstreamFilter(MediaDecoder* decoder, AVPacket* 
             break;
         }
 
-        if (decoder->onFilteredPacket) {
-            decoder->onFilteredPacket(decoder, streamId, filteredPacket->data, filteredPacket->size);
-        }
+        // LOGD("bsf pkt len=%d\n", filteredPacket->size);
+        // APPCOMMON_LOG_PrintBlock(filteredPacket->data, filteredPacket->size > 32 ? 32 : filteredPacket->size);
+        // if (decoder->onFilteredPacket) {
+        //     decoder->onFilteredPacket(decoder, streamId, filteredPacket->data, filteredPacket->size);
+        // }
 
         mediaDecoderProcessDecode(decoder, filteredPacket, streamId);
         av_packet_unref(filteredPacket);
@@ -469,6 +454,15 @@ int mediaDecoderReadFrame(MediaDecoder* decoder) {
     return 1;
 }
 
+static void mediaDecoderLog(void* avc1, int level, const char* fmt, va_list args) {
+    char line[512];
+    if (level <= AV_LOG_INFO) {
+        vsprintf(line, fmt, args);
+        LOGD("%s", line);
+    }
+}
+
 void mediaDecoderInit(void) {
-    av_log_set_level(AV_LOG_VERBOSE);
+    av_log_set_level(AV_LOG_INFO);
+    av_log_set_callback(mediaDecoderLog);
 }
