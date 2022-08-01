@@ -10,7 +10,6 @@
 
 struct MP4_MUXER_STREAM {
     AVStream *st;
-    AVPacket *tmp_pkt;
     int64_t nextPts;
     AVRational timeBase;
 };
@@ -26,7 +25,6 @@ typedef struct MP4_MUXER_VIDEO_PARAMS {
     int width;
     int height;
     int frameRate;
-    int gopSize;
 } MP4_MUXER_VIDEO_PARAMS;
 
 typedef enum MP4_MUXER_AUDIO_CHANNEL_LAYOUT {

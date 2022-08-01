@@ -173,7 +173,7 @@ int mp4MuxerAddVideoStream(MP4_MUXER *muxer, const MP4_MUXER_VIDEO_PARAMS *param
      * identical to 1. */
     c->time_base = (AVRational){1, params->frameRate};
 
-    c->gop_size = params->gopSize; /* emit one intra frame every twelve frames at most */
+    // c->gop_size = params->gopSize; /* emit one intra frame every twelve frames at most */
     c->pix_fmt = STREAM_PIX_FMT;
     return mp4MuxerAddStream(muxer, c);
 }

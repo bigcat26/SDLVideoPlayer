@@ -143,11 +143,13 @@ int muxerWriteFrame(MP4_MUXER *muxer, const char *file, int index) {
 
     // PKT_FLAG_KEY
     int flags = 0;
+#if 0
     uint8_t nalType = shaped[4] & 0x1F;
     printf("frame #%d file=%s data=%02x %02x\n", index, file, shaped[4], shaped[5]);
     if (H264_NALU_IS_KEYFRAME(nalType)) {
         flags = 1; // PKT_FLAG_KEY
     }
+#endif
 
     ret = mp4MuxerWriteFrame(muxer, 0, shaped, size, flags);
     if (ret) {
@@ -198,7 +200,7 @@ int main(int argc, char **argv) {
     vopts.width = 640;
     vopts.height = 480;
     vopts.frameRate = 15;
-    vopts.gopSize = 45;
+    // vopts.gopSize = 45;
     res = mp4MuxerAddH264Stream(muxer, &vopts);
     assert(res >= 0);
 
